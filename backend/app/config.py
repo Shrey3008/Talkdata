@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     GROQ_API_KEY: str = ""
     CORS_ORIGINS: str = "http://localhost:5173"
     DEBUG: bool = False
+    ENABLE_SCHEDULER: bool = False  # true on Render; local refresh is Airflow's job
 
     @property
     def cors_origins_list(self) -> list[str]:

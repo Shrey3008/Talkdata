@@ -148,7 +148,36 @@ The full user-facing app: a dark-themed analytics workspace (Vite + React) that 
 - ⏳ Signup-from-UI flow not exercised (login, not signup, was tested end-to-end)
 - ⏳ Mobile/responsive layout is desktop-first; polish deferred to Phase 8
 
-## Phase 5 — Airflow pipeline — *not started*
+## Phase 5 — Data pipeline: Airflow (local) + APScheduler (deployed)
+
+### What was built
+The two-tier scheduling approach agreed in Phase 0, both tiers sharing the same data contract.
+
+- **Local Airflow stack** (`airflow/docker-compose.airflow.yml`): Airflow 2.10 standalone + its own Postgres metadata DB, UI at localhost:8081 (admin/admin). DAGs mount from `airflow/dags/`; the TalkData Supabase connection comes from `backend/.env`.
+- **`refresh_sample_data` DAG** (daily 03:00 UTC) — a real 5-task ETL with TaskFlow API:
+  `extract_backlog` (find missing machine-days since last load) → `generate_records` (simulated ingest; ~3% of rows deliberately arrive dirty, e.g. negative downtime, so cleaning has real work) → `clean_data` (repair violations, report per-rule fix counts) → `prune_history` (rolling 90-day window) → `quality_checks` (hard assertions: no negatives, defects ≤ units, no future dates, all machines covered, data current through today — the DAG fails loudly on contract violations).
+- **`schema_embedding_refresh` DAG** (weekly) — `extract_docs` (imports the *same* curated schema-metadata module the backend uses, mounted read-only into the container) → `embed_and_load` (fastembed, delete+insert in one transaction so readers never see an empty table) → `validate_retrieval` (embeds a probe question and asserts downtime/department docs rank in the top 3).
+- **Production scheduler**: `app/scheduler.py` (APScheduler, started via FastAPI lifespan when `ENABLE_SCHEDULER=true`) runs the same daily refresh + weekly re-embed, implemented in `app/services/data_refresh.py`. Off locally — Airflow owns local refresh; on for Render.
+
+### Key decisions
+- **Airflow local-only, APScheduler in prod** — Airflow's webserver+scheduler+metadata-DB footprint doesn't fit Render's free tier (and free web services spin down on idle, which kills schedulers). The DAGs are the portfolio artifact; APScheduler mirrors their schedules (03:00 UTC daily / Sunday 04:00 UTC) so both environments behave identically.
+- **Single source of truth for schema docs**: the embedding DAG bind-mounts the backend's `schema_metadata.py` rather than keeping a copy, so the RAG layer and the pipeline can never drift apart. The refresh logic, by contrast, is intentionally implemented twice (sync SQL in the DAG, async in the service) — the DAG version is meant to be read as standalone ETL code, and keeping the deployed app importing nothing from `airflow/` keeps the deployment image lean.
+- **Quality gates as assertions, not logs** — a data contract that only warns is decoration; the DAG run goes red if the dataset is wrong.
+- **Airflow UI on host port 8081** — 8080 was already taken locally.
+
+### Bugs / issues hit
+1. **Empty `DATABASE_URL` inside the Airflow container.** `${DATABASE_URL}` under compose `environment:` interpolates from the *host shell*, not from `env_file:` — so the DAG got an empty string. Fix: drop the interpolation and read `DATABASE_URL` (injected by `env_file`) directly in the DAGs.
+2. **Docker can't mount a single file inside an already-bind-mounted directory** (`dags/shared/…` under the `dags/` mount). Fix: mount the shared metadata module at its own path (`/opt/shared/`).
+3. **`quality_checks` assertion compared a `date` to a `str`** — `stats["latest"] == str(date.today())` is always False (the DB driver returns a `date` object), so the check failed even on good data. Fix: compare `date` to `date`. Subtle lesson: the failure *looked* like a data problem and the logged stats looked perfect; the bug was in the check itself.
+4. **asyncpg inferred `current_date - :window` parameter as `date`** (APScheduler path only — psycopg2 in the DAG was fine), causing `COALESCE types date and integer cannot be matched`. Fix: explicit `(:window)::int` casts. Same SQL, two drivers, one of them needed the hint.
+5. **Model cache volume unwritable by Airflow.** Docker named volumes are created root-owned, but the Airflow image runs as uid 50000 — the embedding model download died with a misleading "Could not load model from any source". Fix: a one-shot `airflow-init-perms` service chowns the volume before Airflow starts (self-healing for fresh checkouts).
+6. (Noted) An earlier seed quirk surfaced here: `seed.py` generated 90 days ending *yesterday*, so the DAG's first real run correctly ingested one day per machine (72 records, 2 dirty rows cleaned) — the pipeline's first production moment was actually doing its job.
+
+### Verified working
+- ✅ `refresh_sample_data` DAG run: **success** — first run ingested 72 records / cleaned 2 dirty rows; second run proved idempotency (0 to ingest, all quality gates green, 6,552 total records, all 24 machines current through today)
+- ✅ `schema_embedding_refresh` DAG run: **success** — 13 docs re-embedded, probe-question retrieval sanity check passed
+- ✅ APScheduler refresh function runs clean against Supabase; scheduler correctly dormant locally (`ENABLE_SCHEDULER=false`) and imports verified
+- ⏳ Live cron firing on Render happens in Phase 7
 
 ## Phase 6 — Integration — *not started*
 

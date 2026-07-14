@@ -14,13 +14,15 @@ AI-powered natural language analytics platform. Ask a plain-English business que
 ## Status
 
 - [x] Phase 1 — Backend scaffold, DB schema, JWT/RBAC auth
-- [ ] Phase 2 — Schema-aware RAG (pgvector)
-- [ ] Phase 3 — NL → SQL generation (Groq)
-- [ ] Phase 4 — Frontend
-- [ ] Phase 5 — Airflow pipeline
+- [x] Phase 2 — Schema-aware RAG (pgvector)
+- [x] Phase 3 — NL → SQL generation (Groq)
+- [x] Phase 4 — Frontend
+- [x] Phase 5 — Airflow pipeline (local) + APScheduler (deployed)
 - [ ] Phase 6 — Integration
 - [ ] Phase 7 — Deployment
 - [ ] Phase 8 — Polish
+
+See [PROJECT_LOG.md](PROJECT_LOG.md) for the full build log: what each phase built, key decisions, and bugs hit.
 
 ## Backend setup
 
@@ -68,6 +70,30 @@ Requires Python 3.11+ and Docker (recommended) or a local venv.
    ```
 
 API docs: http://localhost:8000/docs
+
+## Frontend (local dev)
+
+```bash
+cd frontend
+echo "VITE_API_URL=http://localhost:8000" > .env.local   # first time only
+npm install                                              # first time only
+npm run dev                                              # -> http://localhost:5173
+```
+
+## Airflow (local dev/demo only)
+
+Real Airflow DAGs own the dataset refresh locally; the deployed app uses
+APScheduler inside FastAPI instead (Airflow doesn't fit Render's free tier).
+
+```bash
+cd airflow
+docker compose -f docker-compose.airflow.yml up
+# UI: http://localhost:8081 (admin / admin)
+```
+
+DAGs:
+- `refresh_sample_data` (daily 03:00 UTC): ingest missing machine-days → clean violations → prune to a rolling 90-day window → hard data-quality gates
+- `schema_embedding_refresh` (weekly): re-embed curated schema docs into pgvector → validate retrieval with a probe question
 
 ## Sample dataset
 

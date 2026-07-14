@@ -1,10 +1,25 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import auth, dashboards, history, query, rag
 from app.config import settings
 
-app = FastAPI(title="TalkData API", version="0.1.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    if settings.ENABLE_SCHEDULER:
+        from app.scheduler import scheduler, start_scheduler
+
+        start_scheduler()
+        yield
+        scheduler.shutdown(wait=False)
+    else:
+        yield
+
+
+app = FastAPI(title="TalkData API", version="0.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

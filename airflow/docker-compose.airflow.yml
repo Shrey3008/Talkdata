@@ -1,0 +1,67 @@
+# Local Airflow for development/demo only.
+# Production refresh on Render uses APScheduler inside the FastAPI app instead
+# (Airflow's multi-process footprint doesn't fit Render's free tier).
+#
+# Usage:
+#   cd airflow
+#   docker compose -f docker-compose.airflow.yml up
+#   -> UI at http://localhost:8081 (user: admin / password: admin)
+services:
+  airflow-metadata-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - airflow_metadata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 5s
+      retries: 10
+
+  # Named volumes are created root-owned; Airflow runs as uid 50000 and needs
+  # to write the embedding-model cache. One-shot chown before Airflow starts.
+  airflow-init-perms:
+    image: apache/airflow:2.10.4-python3.11
+    user: "0:0"
+    entrypoint: ["/bin/bash", "-c", "chown -R 50000:0 /opt/model_cache"]
+    volumes:
+      - airflow_model_cache:/opt/model_cache
+
+  airflow:
+    image: apache/airflow:2.10.4-python3.11
+    depends_on:
+      airflow-metadata-db:
+        condition: service_healthy
+      airflow-init-perms:
+        condition: service_completed_successfully
+    environment:
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-metadata-db/airflow
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__DEFAULT_TIMEZONE: UTC
+      AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "true"
+      _AIRFLOW_DB_MIGRATE: "true"
+      _AIRFLOW_WWW_USER_CREATE: "true"
+      _AIRFLOW_WWW_USER_USERNAME: admin
+      _AIRFLOW_WWW_USER_PASSWORD: admin
+      # Extra deps for the schema-embedding DAG.
+      _PIP_ADDITIONAL_REQUIREMENTS: "fastembed==0.7.1 pgvector==0.2.5"
+      FASTEMBED_CACHE_PATH: /opt/model_cache
+    # DAGs read DATABASE_URL (the TalkData Supabase connection) from backend/.env.
+    env_file:
+      - ../backend/.env
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
+      # Curated schema docs are shared with the backend (single source of truth).
+      - ../backend/app/services/schema_metadata.py:/opt/shared/schema_metadata.py:ro
+      - airflow_model_cache:/opt/model_cache
+    ports:
+      - "8081:8080"  # host 8081 (8080 commonly taken locally)
+    command: standalone
+
+volumes:
+  airflow_metadata:
+  airflow_model_cache:

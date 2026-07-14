@@ -13,4 +13,5 @@ pgvector==0.2.5
 fastembed>=0.6,<0.8
 groq>=0.11,<1
 sqlglot>=25,<27
+apscheduler>=3.10,<4
 email-validator==2.1.1
