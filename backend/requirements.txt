@@ -11,4 +11,6 @@ python-multipart==0.0.9
 python-dotenv==1.0.1
 pgvector==0.2.5
 fastembed>=0.6,<0.8
+groq>=0.11,<1
+sqlglot>=25,<27
 email-validator==2.1.1
