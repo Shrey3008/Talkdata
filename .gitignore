@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+
+# Env
+.env
+*.env.local
+
+# Node
+node_modules/
+dist/
+build/
+.vercel/
+
+# Airflow
+airflow/logs/
+airflow/airflow.db
+airflow/.env
+
+# OS
+.DS_Store
