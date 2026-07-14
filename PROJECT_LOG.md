@@ -119,7 +119,34 @@ Also built: query history API (list + delete, per-user), pinned-queries API (lis
 - ⏳ Repair path (`was_repaired: true`) not yet observed live — both test questions generated valid SQL first try
 - ⏳ Rate limiting on /api/query deferred to Phase 8
 
-## Phase 4 — Frontend (React) — *not started*
+## Phase 4 — Frontend (React)
+
+### What was built
+The full user-facing app: a dark-themed analytics workspace (Vite + React) that exercises every backend feature.
+
+- **Auth**: combined login/signup page; JWT pair stored client-side; an axios interceptor attaches the access token to every call and transparently refreshes it on 401 (single-flight, so parallel 401s trigger one refresh) before retrying; hard logout to `/login` if the refresh itself fails.
+- **Workspace**: chat-style question box (Enter to ask), one-click suggestion chips, transparent **Generated SQL block** with copy button and an "auto-repaired" tag when the backend's repair path fired, auto-rendered chart, results table, and a query-history sidebar (click to re-run, hover to delete).
+- **Charts** (recharts): auto-rendered from the backend's `chart_type` — horizontal bars for categorical, line for time series, donut pie for small part-to-whole splits, big stat tile for single values, table-only fallback.
+- **Dashboard**: grid of pinned queries, each card re-running its saved SQL live on load, with chart/table toggle and unpin.
+- Routing (react-router): protected routes redirect to `/login`; logged-in users are bounced away from `/login`.
+
+### Key decisions
+- **Vite over CRA/Next**: standard modern React tooling; no SSR needed for a dashboard app behind auth, and Vercel builds Vite natively. API base URL comes from `VITE_API_URL` env so the same code points at localhost in dev and Render in prod.
+- **Followed the dataviz design method**: picked the reference palette's dark-mode steps as CSS custom properties, validated the 6-slot categorical palette with the palette validator (passes; CVD floor-band caveat handled since bars are single-hue and pies carry direct labels + legend), single-hue bars for magnitude comparisons (categorical color only where identity is the job, e.g. pie slices), 2px lines with surface-ringed dots, hairline gridlines, ≤24px bars with rounded data-ends, text in ink tokens rather than series colors.
+- **No state library**: auth context + local component state is all this app needs; adding Redux/Zustand would be resume-padding, not engineering.
+- **History sidebar re-runs the question** (fresh generation) rather than replaying stored SQL — results stay current and the repair path stays exercised; pinned dashboard cards *do* replay stored SQL because a dashboard should be stable and fast.
+
+### Bugs / issues hit
+1. **Duplicate x-axis tick labels on small values.** Defect rates (~0.01–0.03) rendered ticks as "0.01, 0.01, 0.02" because the number formatter rounded to 2 decimals. Fixed with 3-significant-digit precision formatting.
+2. (Cosmetic, no fix needed) an early screenshot during verification caught recharts mid-animation, which briefly looked like a data bug — bars were fine one frame later.
+
+### Verified working (driven in a real browser)
+- ✅ Login with existing account → workspace
+- ✅ Suggestion chip → full pipeline → SQL block + auto bar chart + results table rendered; history sidebar updated
+- ✅ Pin modal → pin created → Dashboard shows both pinned cards running live queries with correct charts
+- ✅ Chart/table toggle and unpin controls present; axis ticks distinct after fix
+- ⏳ Signup-from-UI flow not exercised (login, not signup, was tested end-to-end)
+- ⏳ Mobile/responsive layout is desktop-first; polish deferred to Phase 8
 
 ## Phase 5 — Airflow pipeline — *not started*
 
