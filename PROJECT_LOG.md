@@ -60,6 +60,7 @@ The FastAPI backend skeleton with a working auth system and a realistic manufact
 - ✅ Signup / login / `/me` verified end-to-end (valid tokens accepted, invalid rejected)
 - ✅ Aggregate SQL over seeded data returns sensible per-department numbers
 - ✅ Committed to git (`.env` excluded)
+- ✅ Pushed to GitHub: https://github.com/Shrey3008/Talkdata — before the first push, verified no secrets were tracked (`git status` clean, `.env` gitignored, and a `git grep` across tracked files for the DB password, JWT secret, and project ref returned zero matches)
 - ⏳ RBAC admin-only endpoint not yet exercised (no admin-only routes exist yet — first one arrives with the admin refresh endpoint in a later phase)
 - ⏳ Automated tests deferred to Phase 8 (polish)
 
