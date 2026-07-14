@@ -66,7 +66,30 @@ The FastAPI backend skeleton with a working auth system and a realistic manufact
 
 ---
 
-## Phase 2 — Schema-aware RAG (pgvector) — *not started*
+## Phase 2 — Schema-aware RAG (pgvector)
+
+### What was built
+The retrieval layer that makes SQL generation *schema-aware*: instead of stuffing the whole database schema into every LLM prompt, each table and column is described in natural language, embedded, and stored in pgvector. When a user asks a question, the most relevant schema chunks are retrieved by cosine similarity and assembled into a compact context block for the Phase 3 prompt.
+
+- **Curated schema docs** (`app/services/schema_metadata.py`): 13 hand-written descriptions (5 table-level, 8 column-level) covering the manufacturing tables. Each doc includes synonyms users actually type ("outage/breakdown" for downtime, "scrap/faulty" for defects), example values, and join paths. App tables (users, query_history, etc.) are deliberately excluded so the NL→SQL layer can never be steered toward them.
+- **Embedding service**: all-MiniLM-L6-v2 (384-dim) running via **fastembed** (ONNX).
+- **RAG service**: `reindex_schema()` (wipe + re-embed, idempotent), `retrieve_schema_context()` (pgvector cosine distance, top-k), and `format_context_for_prompt()` (groups retrieved docs per table, table summaries first since they carry join info).
+- **Admin-only endpoints**: `POST /api/rag/search` (inspect what a question retrieves) and `POST /api/rag/reindex` — both gated by `require_role(admin)`, the first real use of the RBAC dependency.
+- **Docker**: named volume + `FASTEMBED_CACHE_PATH` so the embedding model (~90MB) downloads once, not on every rebuild.
+
+### Key decisions
+- **fastembed (ONNX) instead of sentence-transformers.** Same all-MiniLM-L6-v2 model, but sentence-transformers pulls in PyTorch (~2GB image, too heavy for Render's 512MB free tier); fastembed runs it in ~100MB. The 384-dim output matches the `schema_embeddings` column created in Phase 1.
+- **Curated metadata over introspected DDL.** Auto-introspecting `information_schema` was an option, but hand-written descriptions embed *meaning* (synonyms, semantics, join hints) rather than just structure — retrieval quality depends on the question's vocabulary landing near the doc's vocabulary. The doc set is small enough to maintain by hand.
+- **Table-level + column-level granularity.** Table docs carry join paths and always appear first in the assembled context; column docs give precise semantics so questions like "defect rates" hit `defect_count` directly.
+
+### Bugs / issues hit
+None — build went clean; first model download is slow (~25s, unauthenticated HF rate limits) but is cached in the Docker volume afterward.
+
+### Status
+- ✅ 13 schema docs embedded into `schema_embeddings`
+- ✅ Retrieval quality spot-checked on three representative questions — correct tables/columns ranked top each time (e.g. "which department has the most downtime?" → `downtime_minutes`, `departments`)
+- ✅ RBAC verified both ways: member gets 403 on `/api/rag/search`, admin gets 200 (test account promoted to admin)
+- ⏳ `format_context_for_prompt()` output not yet consumed by anything — Phase 3 wires it into the Groq prompt
 
 ## Phase 3 — NL → SQL generation (Groq) — *not started*
 
