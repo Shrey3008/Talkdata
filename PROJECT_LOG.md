@@ -202,9 +202,16 @@ Deploy configuration; the dashboard clicks are the owner's (accounts are persona
 - **Session pooler URL on Render** — same IPv6 constraint discovered in Phase 1 applies to Render's network.
 - **Documented the free-tier honestly**: ~50s cold start after 15 min idle, and APScheduler only fires while awake. Acceptable for a portfolio; a free uptime pinger is the workaround if wanted.
 
-### Status
-- ✅ Deploy config committed and pushed
-- ⏳ Awaiting owner's dashboard steps (Render blueprint apply + secrets, Vercel import + `VITE_API_URL`, then CORS_ORIGINS update)
-- ⏳ Post-deploy smoke test once URLs exist
+### Status — DEPLOYED ✅
+Live URLs:
+- **App:** https://talkdata-sigma.vercel.app
+- **API:** https://talkdata-api.onrender.com (docs at `/docs`, health at `/health`)
+
+Post-deploy smoke test (driven in a real browser against production):
+- ✅ `/health` ok; login works against the shared Supabase DB (local + prod accounts are the same)
+- ✅ CORS preflight returns the Vercel origin after `CORS_ORIGINS` update
+- ✅ Full NL query through the deployed stack: "Top 5 machines by defect count this month" → correct SQL (month/year filter, LIMIT 5), chart + history rendered in the live UI
+- ✅ First query after cold start ~13s (embedding model load + Groq); subsequent queries a few seconds
+- ⏳ Known free-tier behavior (documented in README): ~50s cold start after 15 min idle; APScheduler fires only while awake
 
 ## Phase 8 — Polish — *not started*
