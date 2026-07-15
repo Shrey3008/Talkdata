@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     CORS_ORIGINS: str = "http://localhost:5173"
     DEBUG: bool = False
     ENABLE_SCHEDULER: bool = False  # true on Render; local refresh is Airflow's job
+    QUERY_RATE_LIMIT: int = 10  # NL queries per user per window (each costs a Groq call)
+    QUERY_RATE_WINDOW_SECONDS: float = 60.0
 
     @property
     def cors_origins_list(self) -> list[str]:

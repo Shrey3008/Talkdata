@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_current_user
+from app.core.rate_limit import rate_limit_queries
 from app.db.session import get_db
 from app.models.query_history import QueryHistory
 from app.models.user import User
@@ -19,7 +19,7 @@ router = APIRouter(prefix="/api/query", tags=["query"])
 async def run_query(
     payload: QueryRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(rate_limit_queries),
 ) -> QueryResponse:
     # 1. RAG: retrieve relevant schema context for the question
     docs = await retrieve_schema_context(db, payload.question)

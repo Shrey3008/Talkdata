@@ -31,7 +31,9 @@ api.interceptors.response.use(
   (res) => res,
   async (error) => {
     const original = error.config;
-    const isAuthCall = original?.url?.includes("/api/auth/");
+    // Don't refresh-retry the auth endpoints themselves (login/signup/refresh),
+    // but DO refresh for /api/auth/me — it's a normal protected resource.
+    const isAuthCall = /\/api\/auth\/(login|signup|refresh)/.test(original?.url ?? "");
     if (error.response?.status === 401 && !original._retried && !isAuthCall && storage.refresh) {
       original._retried = true;
       try {

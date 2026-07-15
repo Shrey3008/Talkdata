@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, apiErrorMessage } from "../api/client";
-import ChartView from "../components/ChartView";
+import ChartView from "../components/LazyChartView";
 import ResultsTable from "../components/ResultsTable";
 
 function PinCard({ pin, onUnpin }) {

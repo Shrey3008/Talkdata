@@ -214,4 +214,25 @@ Post-deploy smoke test (driven in a real browser against production):
 - ✅ First query after cold start ~13s (embedding model load + Groq); subsequent queries a few seconds
 - ⏳ Known free-tier behavior (documented in README): ~50s cold start after 15 min idle; APScheduler fires only while awake
 
-## Phase 8 — Polish — *not started*
+## Phase 8 — Polish
+
+### What was built
+- **Test suite (55 tests, pytest)**: exhaustive SQL-guard coverage (write statements, multi-statement, schema-qualified escapes, app-table access, subquery/join escapes, CTE shadowing, dangerous functions, row-cap behavior, malformed input), chart-selector heuristics, JWT/password security (tampering, expiry, wrong-key), rate limiter (window sliding, per-user isolation). Run with `docker compose exec backend python -m pytest tests/`.
+- **Chart heuristic fix**: averages/rates/ratios never get pie charts (slices of an average aren't parts of a whole) — column-name signal (`avg|rate|ratio|…`) plus the existing non-negative/slice-count rules.
+- **Rate limiting**: per-user sliding window on `/api/query` (default 10/min, env-configurable), 429 with `Retry-After`. In-memory by design — single instance, protecting the Groq quota, documented as Redis-swap-ready if it ever scales.
+- **Code splitting**: recharts (2/3 of the bundle) now lazy-loads — main chunk 691→291 KB (95 KB gzip); the chart chunk arrives with the first result.
+- **Auth UX fix**: token refresh now fires for `/api/auth/me`, so a returning user with an expired access token (>30 min) but valid refresh token stays logged in instead of being bounced to login.
+
+### The tests immediately paid for themselves
+Writing the suite surfaced **two real bugs in the SQL guard**:
+1. **A whitelist bypass**: `WITH users AS (SELECT * FROM users) SELECT * FROM users` passed validation — the guard treated every CTE alias as safe, but inside a CTE's own definition the name still refers to the *real* table (Postgres non-recursive WITH semantics). Fixed with proper scope tracking: a CTE alias is only visible to later CTEs and the main body; recursive and nested WITH are rejected outright.
+2. **Unhandled crash on non-SQL input**: sqlglot raises `TokenError` (not `ParseError`) on garbage like an LLM refusal message — the guard only caught `ParseError`, so this would 500 instead of returning a clean 422. Now catches the `SqlglotError` base class.
+
+Also observed during verification: the **Phase 3 repair path fired live for the first time** ("Average throughput per shift" — Groq's first SQL attempt failed, the DB error was fed back, the corrected query succeeded, and the UI showed its "auto-repaired" tag). That closes the last open ⏳ from Phase 3.
+
+### Verified working
+- ✅ 55/55 tests pass in the backend container
+- ✅ Averages query now renders `auto: bar` in the browser (was pie)
+- ✅ Lazy chart chunk loads and renders; main bundle 95 KB gzip
+- ✅ App boots clean with the rate limiter wired (unit-tested; not fired live to avoid burning Groq quota)
+- ✅ Deployed to production (Render auto-deploys backend, Vercel auto-deploys frontend on push)

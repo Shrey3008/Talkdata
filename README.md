@@ -1,5 +1,7 @@
 # TalkData
 
+**Live demo:** https://talkdata-sigma.vercel.app · **API docs:** https://talkdata-api.onrender.com/docs
+
 AI-powered natural language analytics platform. Ask a plain-English business question, get back auto-generated SQL, a results table, and an auto-selected chart — no SQL required.
 
 ## Stack
@@ -18,9 +20,9 @@ AI-powered natural language analytics platform. Ask a plain-English business que
 - [x] Phase 3 — NL → SQL generation (Groq)
 - [x] Phase 4 — Frontend
 - [x] Phase 5 — Airflow pipeline (local) + APScheduler (deployed)
-- [ ] Phase 6 — Integration
-- [ ] Phase 7 — Deployment
-- [ ] Phase 8 — Polish
+- [x] Phase 6 — Integration
+- [x] Phase 7 — Deployment
+- [x] Phase 8 — Polish
 
 See [PROJECT_LOG.md](PROJECT_LOG.md) for the full build log: what each phase built, key decisions, and bugs hit.
 

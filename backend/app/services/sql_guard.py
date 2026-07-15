@@ -17,6 +17,45 @@ class SQLValidationError(Exception):
     pass
 
 
+def _scan_tables(node: exp.Expression, visible_ctes: set[str], skip_ids: set[int]) -> None:
+    for table in node.find_all(exp.Table):
+        if id(table) in skip_ids:
+            continue
+        name = table.name.lower()
+        if name in visible_ctes:
+            continue
+        if table.db or table.catalog:
+            raise SQLValidationError(f"Schema-qualified table not allowed: {table.sql()}")
+        if name not in ALLOWED_TABLES:
+            raise SQLValidationError(f"Table not allowed: {name}")
+
+
+def _check_table_whitelist(tree: exp.Expression) -> None:
+    """Enforce the table whitelist with proper CTE scoping.
+
+    A CTE alias is only visible to *later* CTEs and the main body — inside its
+    own definition the name still refers to the real table (Postgres
+    non-recursive WITH semantics), so `WITH users AS (SELECT * FROM users) ...`
+    must be rejected, not treated as self-referencing.
+    """
+    with_node = tree.args.get("with")
+    all_withs = list(tree.find_all(exp.With))
+    if any(w is not with_node for w in all_withs):
+        raise SQLValidationError("Nested WITH clauses are not allowed")
+
+    visible: set[str] = set()
+    scanned_ids: set[int] = set()
+    if with_node is not None:
+        if with_node.args.get("recursive"):
+            raise SQLValidationError("Recursive CTEs are not allowed")
+        for cte in with_node.expressions:
+            _scan_tables(cte.this, visible, set())
+            scanned_ids.update(id(t) for t in cte.this.find_all(exp.Table))
+            visible.add(cte.alias_or_name.lower())
+
+    _scan_tables(tree, visible, scanned_ids)
+
+
 def validate_sql(sql: str) -> str:
     """Parse, check, and return the SQL (with a row cap applied). Raises on violation."""
     if not sql or not sql.strip():
@@ -24,7 +63,7 @@ def validate_sql(sql: str) -> str:
 
     try:
         statements = sqlglot.parse(sql, read="postgres")
-    except sqlglot.errors.ParseError as e:
+    except sqlglot.errors.SqlglotError as e:  # ParseError, TokenError, ...
         raise SQLValidationError(f"SQL failed to parse: {e}") from e
 
     statements = [s for s in statements if s is not None]
@@ -51,15 +90,7 @@ def validate_sql(sql: str) -> str:
         if tree.find(node_type):
             raise SQLValidationError("Only read-only SELECT statements are allowed")
 
-    cte_names = {cte.alias_or_name.lower() for cte in tree.find_all(exp.CTE)}
-    for table in tree.find_all(exp.Table):
-        name = table.name.lower()
-        if name in cte_names:
-            continue
-        if table.db or table.catalog:
-            raise SQLValidationError(f"Schema-qualified table not allowed: {table.sql()}")
-        if name not in ALLOWED_TABLES:
-            raise SQLValidationError(f"Table not allowed: {name}")
+    _check_table_whitelist(tree)
 
     # Block function calls that read files / execute / touch system state.
     for func in tree.find_all(exp.Anonymous):

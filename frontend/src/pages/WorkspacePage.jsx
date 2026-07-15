@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { api, apiErrorMessage } from "../api/client";
-import ChartView from "../components/ChartView";
+import ChartView from "../components/LazyChartView";
 import HistorySidebar from "../components/HistorySidebar";
 import PinModal from "../components/PinModal";
 import ResultsTable from "../components/ResultsTable";
