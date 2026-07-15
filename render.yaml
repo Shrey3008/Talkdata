@@ -1,0 +1,23 @@
+# Render blueprint — deploy via Dashboard: New + -> Blueprint -> select this repo.
+# Secrets (DATABASE_URL, JWT_SECRET_KEY, GROQ_API_KEY) are prompted on first deploy
+# (sync: false keeps them out of the repo).
+services:
+  - type: web
+    name: talkdata-api
+    runtime: docker
+    rootDir: backend
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: CORS_ORIGINS
+        value: http://localhost:5173  # replace with the Vercel URL after frontend deploy
+      - key: ENABLE_SCHEDULER
+        value: "true"
+      - key: FASTEMBED_CACHE_PATH
+        value: /tmp/fastembed_cache

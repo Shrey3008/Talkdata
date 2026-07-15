@@ -95,6 +95,21 @@ DAGs:
 - `refresh_sample_data` (daily 03:00 UTC): ingest missing machine-days → clean violations → prune to a rolling 90-day window → hard data-quality gates
 - `schema_embedding_refresh` (weekly): re-embed curated schema docs into pgvector → validate retrieval with a probe question
 
+## Deployment (Render + Vercel)
+
+**Backend — Render** (blueprint in [render.yaml](render.yaml)):
+1. Render dashboard → **New + → Blueprint** → select this repo → Apply
+2. When prompted, set the secret env vars: `DATABASE_URL` (Supabase **session pooler** URI with `postgresql+asyncpg://` prefix — the direct host is IPv6-only and unreachable from Render), `JWT_SECRET_KEY`, `GROQ_API_KEY`
+3. After the frontend deploys, update `CORS_ORIGINS` to the Vercel URL
+
+**Frontend — Vercel:**
+1. Vercel dashboard → **Add New → Project** → import this repo
+2. Set **Root Directory** to `frontend` (framework auto-detects as Vite)
+3. Add env var `VITE_API_URL` = the Render service URL (e.g. `https://talkdata-api.onrender.com`)
+4. Deploy, then copy the Vercel URL into the Render `CORS_ORIGINS` env var
+
+**Free-tier caveats:** Render free services spin down after ~15 min idle — the first request after idle takes ~50s (cold start), and the APScheduler refresh only fires while the service is awake. Both are acceptable for a portfolio demo; a free uptime pinger (e.g. UptimeRobot hitting `/health` every 10 min) keeps it warm if desired.
+
 ## Sample dataset
 
 Manufacturing ops data: `departments` → `machines` → `production_records` (units produced, downtime minutes, defect count, throughput rate) across 90 days x 3 shifts, seeded by `backend/seed.py`.

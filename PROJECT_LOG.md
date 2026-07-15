@@ -179,8 +179,32 @@ The two-tier scheduling approach agreed in Phase 0, both tiers sharing the same 
 - ✅ APScheduler refresh function runs clean against Supabase; scheduler correctly dormant locally (`ENABLE_SCHEDULER=false`) and imports verified
 - ⏳ Live cron firing on Render happens in Phase 7
 
-## Phase 6 — Integration — *not started*
+## Phase 6 — Integration
 
-## Phase 7 — Deployment (Render + Vercel) — *not started*
+### What was built / verified
+No new code — a full-stack pass with everything running together (backend, frontend, Airflow, Supabase):
+- ✅ NL query ("total units produced today by department") returned data that **today's Airflow DAG run ingested** — proving pipeline → DB → RAG → Groq → API → chart selection connect end-to-end
+- ✅ Frontend production build (`npm run build`) passes clean (692 KB bundle, mostly recharts; code-splitting noted as optional Phase 8 polish)
+- ✅ All services stable: backend container, Airflow standalone + metadata DB
+- Nothing broke integrating — the phase was quick because each prior phase was verified against the real hosted DB as it was built, not mocked.
+
+## Phase 7 — Deployment (Render + Vercel)
+
+### What was built
+Deploy configuration; the dashboard clicks are the owner's (accounts are personal):
+- **`render.yaml` blueprint**: Docker web service from `backend/`, free plan, `/health` health check, secrets prompted at deploy (`sync: false` — never in the repo), `ENABLE_SCHEDULER=true` so APScheduler owns the refresh in prod, fastembed cache pointed at `/tmp`.
+- **`frontend/vercel.json`**: SPA rewrite so react-router deep links (e.g. `/dashboard`) don't 404.
+- **Dockerfile** now honors Render's injected `PORT` (defaults to 8000 locally).
+- **README deployment section** with the exact step order (backend first, then frontend, then close the CORS loop) and free-tier caveats.
+
+### Key decisions
+- **Render blueprint over manual dashboard setup** — the service definition lives in the repo, reviewable and reproducible.
+- **Session pooler URL on Render** — same IPv6 constraint discovered in Phase 1 applies to Render's network.
+- **Documented the free-tier honestly**: ~50s cold start after 15 min idle, and APScheduler only fires while awake. Acceptable for a portfolio; a free uptime pinger is the workaround if wanted.
+
+### Status
+- ✅ Deploy config committed and pushed
+- ⏳ Awaiting owner's dashboard steps (Render blueprint apply + secrets, Vercel import + `VITE_API_URL`, then CORS_ORIGINS update)
+- ⏳ Post-deploy smoke test once URLs exist
 
 ## Phase 8 — Polish — *not started*
